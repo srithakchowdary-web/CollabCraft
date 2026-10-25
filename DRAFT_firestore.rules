@@ -1,0 +1,212 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'about', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() <= 128 &&
+        data.displayName is string && data.displayName.size() <= 100 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+        (!('about' in data) || (data.about is string && data.about.size() <= 500)) &&
+        (!('createdAt' in data) || data.createdAt is string) &&
+        (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function isValidProject(data) {
+      return data.keys().hasAll(['title', 'leaderId', 'leaderEmail', 'memberIds']) &&
+        data.keys().hasOnly(['title', 'description', 'leaderId', 'leaderEmail', 'memberIds', 'memberEmails', 'createdAt', 'updatedAt']) &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        data.leaderId is string && data.leaderId.size() <= 128 &&
+        data.leaderEmail is string && data.leaderEmail.size() <= 128 &&
+        data.memberIds is list && data.memberIds.size() <= 50 &&
+        (!('memberEmails' in data) || (data.memberEmails is list && data.memberEmails.size() <= 50)) &&
+        (!('createdAt' in data) || data.createdAt is string) &&
+        (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['projectId', 'senderId', 'senderName', 'text']) &&
+        data.keys().hasOnly(['projectId', 'senderId', 'senderName', 'senderEmail', 'text', 'createdAt']) &&
+        data.projectId is string && data.projectId.size() <= 128 &&
+        data.senderId is string && data.senderId.size() <= 128 &&
+        data.senderName is string && data.senderName.size() <= 100 &&
+        (!('senderEmail' in data) || (data.senderEmail is string && data.senderEmail.size() <= 128)) &&
+        data.text is string && data.text.size() > 0 && data.text.size() <= 2000 &&
+        (!('createdAt' in data) || data.createdAt is string);
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['projectId', 'title', 'status', 'createdBy']) &&
+        data.keys().hasOnly(['projectId', 'title', 'description', 'parentTaskId', 'assigneeId', 'assigneeEmail', 'assigneeName', 'deadline', 'status', 'createdBy', 'createdAt', 'updatedAt']) &&
+        data.projectId is string && data.projectId.size() <= 128 &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+        (!('parentTaskId' in data) || data.parentTaskId == null || (data.parentTaskId is string && data.parentTaskId.size() <= 128)) &&
+        (!('assigneeId' in data) || data.assigneeId == null || (data.assigneeId is string && data.assigneeId.size() <= 128)) &&
+        (!('assigneeEmail' in data) || data.assigneeEmail == null || (data.assigneeEmail is string && data.assigneeEmail.size() <= 128)) &&
+        (!('assigneeName' in data) || data.assigneeName == null || (data.assigneeName is string && data.assigneeName.size() <= 100)) &&
+        (!('deadline' in data) || data.deadline == null || (data.deadline is string && data.deadline.size() <= 50)) &&
+        data.status in ['todo', 'in_progress', 'completed'] &&
+        data.createdBy is string && data.createdBy.size() <= 128 &&
+        (!('createdAt' in data) || data.createdAt is string) &&
+        (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function isValidInvite(data) {
+      return data.keys().hasAll(['projectId', 'projectTitle', 'invitedEmail', 'invitedBy', 'status']) &&
+        data.keys().hasOnly(['projectId', 'projectTitle', 'invitedEmail', 'invitedBy', 'invitedByName', 'status', 'createdAt', 'updatedAt']) &&
+        data.projectId is string && data.projectId.size() <= 128 &&
+        data.projectTitle is string && data.projectTitle.size() <= 120 &&
+        data.invitedEmail is string && data.invitedEmail.size() <= 128 &&
+        data.invitedBy is string && data.invitedBy.size() <= 128 &&
+        (!('invitedByName' in data) || (data.invitedByName is string && data.invitedByName.size() <= 100)) &&
+        data.status in ['pending', 'accepted', 'declined'] &&
+        (!('createdAt' in data) || data.createdAt is string) &&
+        (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    // Master Gate Relational Helper
+    function isProjectMember(projId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/projects/$(projId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/projects/$(projId)).data.memberIds;
+    }
+
+    function isProjectLeader(projId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/projects/$(projId)) &&
+        request.auth.uid == get(/databases/$(database)/documents/projects/$(projId)).data.leaderId;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUser(incoming()) &&
+        incoming().uid == request.auth.uid;
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUser(incoming()) &&
+        incoming().uid == existing().uid;
+      allow delete: if false;
+    }
+
+    // Projects Collection
+    match /projects/{projectId} {
+      allow get: if isSignedIn() &&
+        isValidId(projectId) &&
+        (resource.data.leaderId == request.auth.uid || request.auth.uid in resource.data.memberIds);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() &&
+        isValidId(projectId) &&
+        isValidProject(incoming()) &&
+        incoming().leaderId == request.auth.uid &&
+        request.auth.uid in incoming().memberIds;
+      allow update: if isSignedIn() &&
+        isValidId(projectId) &&
+        isValidProject(incoming()) &&
+        resource.data.leaderId == request.auth.uid &&
+        incoming().leaderId == existing().leaderId;
+      allow delete: if isSignedIn() &&
+        isValidId(projectId) &&
+        resource.data.leaderId == request.auth.uid;
+
+      // Messages Subcollection
+      match /messages/{messageId} {
+        allow get, list: if isValidId(projectId) && isProjectMember(projectId);
+        allow create: if isValidId(projectId) &&
+          isValidId(messageId) &&
+          isProjectMember(projectId) &&
+          isValidMessage(incoming()) &&
+          incoming().projectId == projectId &&
+          incoming().senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // Tasks Subcollection
+      match /tasks/{taskId} {
+        allow get, list: if isValidId(projectId) && isProjectMember(projectId);
+        allow create: if isValidId(projectId) &&
+          isValidId(taskId) &&
+          isProjectLeader(projectId) &&
+          isValidTask(incoming()) &&
+          incoming().projectId == projectId &&
+          incoming().createdBy == request.auth.uid;
+        allow update: if isValidId(projectId) &&
+          isValidId(taskId) &&
+          isProjectMember(projectId) &&
+          isValidTask(incoming()) &&
+          incoming().projectId == existing().projectId &&
+          incoming().createdBy == existing().createdBy &&
+          (
+            // Tier 1: Project leader can update anything
+            (request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.leaderId) ||
+            // Tier 2: Task assignee can only update status
+            (
+              existing().assigneeId == request.auth.uid &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(projectId) &&
+          isValidId(taskId) &&
+          isProjectLeader(projectId);
+      }
+    }
+
+    // Invites Collection
+    match /invites/{inviteId} {
+      allow get: if isSignedIn() &&
+        isValidId(inviteId) &&
+        (resource.data.invitedBy == request.auth.uid || resource.data.invitedEmail == request.auth.token.email);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() &&
+        isValidId(inviteId) &&
+        isValidInvite(incoming()) &&
+        incoming().invitedBy == request.auth.uid &&
+        isProjectLeader(incoming().projectId);
+      allow update: if isSignedIn() &&
+        isValidId(inviteId) &&
+        isValidInvite(incoming()) &&
+        (resource.data.invitedBy == request.auth.uid || resource.data.invitedEmail == request.auth.token.email) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isSignedIn() &&
+        isValidId(inviteId) &&
+        resource.data.invitedBy == request.auth.uid;
+    }
+
+    // Connection test collection
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

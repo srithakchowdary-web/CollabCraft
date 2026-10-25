@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document containing account and profile details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "about": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A workspace group or project managed by a leader and shared with members",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "leaderId": { "type": "string", "maxLength": 128 },
+        "leaderEmail": { "type": "string", "maxLength": 128 },
+        "memberIds": { "type": "array", "description": "List of user IDs who are members" },
+        "memberEmails": { "type": "array", "description": "List of emails of project members" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "leaderId", "leaderEmail", "memberIds"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Real-time chat message in a project chat room",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderEmail": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "senderId", "senderName", "text"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A project task or subtask with assignee, deadline, and status",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "parentTaskId": { "type": "string", "maxLength": 128 },
+        "assigneeId": { "type": "string", "maxLength": 128 },
+        "assigneeEmail": { "type": "string", "maxLength": 128 },
+        "assigneeName": { "type": "string", "maxLength": 100 },
+        "deadline": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "completed"] },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "title", "status", "createdBy"]
+    },
+    "Invite": {
+      "title": "Invite",
+      "description": "Pending invitation for non-registered or team members to join a project",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "maxLength": 128 },
+        "projectTitle": { "type": "string", "maxLength": 120 },
+        "invitedEmail": { "type": "string", "maxLength": 128 },
+        "invitedBy": { "type": "string", "maxLength": 128 },
+        "invitedByName": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "projectTitle", "invitedEmail", "invitedBy", "status"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Chronological audit log entry for actions such as task completion, member invites, and chat summaries",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["task_completed", "task_created", "task_status_changed", "member_invited", "member_joined", "chat_summarized", "tasks_extracted"] },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "actorId": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 100 },
+        "actorEmail": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "type", "title", "actorId", "actorName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of user profiles"
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Collection of projects managed by leaders and members"
+    },
+    "/projects/{projectId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Subcollection of chat messages for a specific project"
+    },
+    "/projects/{projectId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Subcollection of tasks and subtasks for a specific project"
+    },
+    "/projects/{projectId}/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/Activity" },
+      "description": "Subcollection of chronological activity log events for a project"
+    },
+    "/invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/Invite" },
+      "description": "Collection of pending invitations mapped by email"
+    }
+  }
+}

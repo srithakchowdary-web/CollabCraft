@@ -1,0 +1,6 @@
+{
+  "name": "CollabCraft - Project Hub",
+  "description": "Collaborative project workspace featuring authentication, groups, real-time group chat, task management with subtasks, visual progress dashboard, and server-side Gemini AI for chat summarization and task extraction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
